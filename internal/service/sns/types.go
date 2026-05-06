@@ -64,6 +64,13 @@ type TopicAttributesRequest struct {
 	TopicARN string `json:"TopicArn"`
 }
 
+// SetTopicAttributesRequest is the request to set topic attributes.
+type SetTopicAttributesRequest struct {
+	TopicARN       string `json:"TopicArn"`
+	AttributeName  string `json:"AttributeName"`
+	AttributeValue string `json:"AttributeValue"`
+}
+
 // SubscribeRequest is the request for Subscribe.
 type SubscribeRequest struct {
 	TopicARN              string            `json:"TopicArn"`
@@ -189,6 +196,13 @@ type XMLAttributes struct {
 type XMLEntry struct {
 	Key   string `xml:"key"`
 	Value string `xml:"value"`
+}
+
+// XMLSetTopicAttributesResponse is the xml response for SetTopicAttribute.
+type XMLSetTopicAttributesResponse struct {
+	XMLName          struct{}         `xml:"SetTopicAttributesResponse"`
+	Xmlns            string           `xml:"xmlns,attr"`
+	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
 }
 
 // XMLDeleteTopicResponse is the XML response for DeleteTopic.

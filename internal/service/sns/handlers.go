@@ -197,6 +197,61 @@ func (s *Service) GetTopicAttributesHandler(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// SetTopicAttributesHandler handles the SetTopicAttributes action.
+func (s *Service) SetTopicAttributesHandler(w http.ResponseWriter, r *http.Request) {
+	var req SetTopicAttributesRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeTopicError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.TopicARN == "" {
+		writeTopicError(w, errInvalidParameter, "TopicArn is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.AttributeName == "" {
+		writeTopicError(w, errInvalidParameter, "AttributeName is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.AttributeValue == "" {
+		writeTopicError(w, errInvalidParameter, "AttributeValue is required", http.StatusBadRequest)
+
+		return
+	}
+
+	// Set the attributes
+	err := s.storage.SetTopicAttributes(r.Context(), req.TopicARN, req.AttributeName, req.AttributeValue)
+	if err != nil {
+		var sErr *TopicError
+		if errors.As(err, &sErr) {
+			status := http.StatusBadRequest
+			if sErr.Code == errNotFound {
+				status = http.StatusNotFound
+			}
+
+			writeTopicError(w, sErr.Code, sErr.Message, status)
+
+			return
+		}
+
+		writeTopicError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeXMLResponse(w, XMLSetTopicAttributesResponse{
+		Xmlns: snsXMLNS,
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.NewString(),
+		},
+	})
+}
+
 // Subscribe handles the Subscribe action.
 func (s *Service) Subscribe(w http.ResponseWriter, r *http.Request) {
 	var req SubscribeRequest
@@ -517,6 +572,8 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.ListSubscriptionsByTopic(w, r)
 	case "GetTopicAttributes":
 		s.GetTopicAttributesHandler(w, r)
+	case "SetTopicAttributes":
+		s.SetTopicAttributesHandler(w, r)
 	default:
 		writeTopicError(w, errInvalidAction, "The action "+action+" is not valid", http.StatusBadRequest)
 	}

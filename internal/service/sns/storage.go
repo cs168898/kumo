@@ -36,6 +36,7 @@ type Storage interface {
 	ListSubscriptions(ctx context.Context, nextToken string) ([]*Subscription, string, error)
 	ListSubscriptionsByTopic(ctx context.Context, topicARN, nextToken string) ([]*Subscription, string, error)
 	GetTopicAttributes(ctx context.Context, topicARN string) (map[string]string, error)
+	SetTopicAttributes(ctx context.Context, topicARN string, attributeName string, attributeValue string) error
 }
 
 // Option is a configuration option for MemoryStorage.
@@ -493,4 +494,27 @@ func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (
 	maps.Copy(attributes, topic.Attributes)
 
 	return attributes, nil
+}
+
+// SetTopicAttributes sets the attributes of a topic.
+func (m *MemoryStorage) SetTopicAttributes(_ context.Context, topicARN, attributeName, attributeValue string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	topic, exists := m.Topics[topicARN]
+	if !exists {
+		return &TopicError{
+			Code:    "NotFound",
+			Message: fmt.Sprintf("Topic does not exist: %s", topicARN),
+		}
+	}
+
+	// Ensure the attributes map is initialized to avoid panic.
+	if topic.Attributes == nil {
+		topic.Attributes = make(map[string]string)
+	}
+
+	topic.Attributes[attributeName] = attributeValue
+
+	return nil
 }
