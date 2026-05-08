@@ -298,3 +298,44 @@ func TestSNS_CreateTopicIdempotent(t *testing.T) {
 			*createOutput1.TopicArn, *createOutput2.TopicArn)
 	}
 }
+
+func TestSNS_GetTopicAttributes(t *testing.T) {
+	client := newSNSClient(t)
+	ctx := t.Context()
+	topicName := "test-get-topic-attributes"
+
+	// Create topic.
+	topic, err := client.CreateTopic(ctx, &sns.CreateTopicInput{
+		Name: aws.String(topicName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{
+			TopicArn: topic.TopicArn,
+		})
+	})
+
+	// Create a subscription to make subscription count to 1.
+	_, err = client.Subscribe(ctx, &sns.SubscribeInput{
+		TopicArn: topic.TopicArn,
+		Protocol: aws.String("sqs"),
+		Endpoint: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get Topic Attributes.
+	attributes, err := client.GetTopicAttributes(ctx, &sns.GetTopicAttributesInput{
+		TopicArn: topic.TopicArn,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert the response using the golden file pattern.
+	golden.New(t, golden.WithIgnoreFields("CreatedTime")).Assert(t.Name(), attributes)
+}

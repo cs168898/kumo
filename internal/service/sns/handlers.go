@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -142,8 +143,8 @@ func (s *Service) ListTopics(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetTopicAttributesHandler handles the GetTopicAttributes action.
-func (s *Service) GetTopicAttributesHandler(w http.ResponseWriter, r *http.Request) {
+// GetTopicAttributes handles the GetTopicAttributes action.
+func (s *Service) GetTopicAttributes(w http.ResponseWriter, r *http.Request) {
 	var req TopicAttributesRequest
 	if err := readJSONRequest(r, &req); err != nil {
 		writeTopicError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
@@ -177,11 +178,24 @@ func (s *Service) GetTopicAttributesHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var entries []XMLEntry
+	// Create a slice to hold the keys
+	keys := make([]string, 0, len(attributes))
+
+	// Collect all keys from the map
+	for k := range attributes {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	entries := make([]XMLEntry, 0, len(attributes))
 
 	// Construct each XML Entry from attributes
-	for k, v := range attributes {
-		entries = append(entries, XMLEntry{Key: k, Value: v})
+	for _, k := range keys {
+		entries = append(entries, XMLEntry{
+			Key:   k,
+			Value: attributes[k],
+		})
 	}
 
 	writeXMLResponse(w, XMLGetTopicAttributesResponse{
@@ -516,7 +530,7 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	case "ListSubscriptionsByTopic":
 		s.ListSubscriptionsByTopic(w, r)
 	case "GetTopicAttributes":
-		s.GetTopicAttributesHandler(w, r)
+		s.GetTopicAttributes(w, r)
 	default:
 		writeTopicError(w, errInvalidAction, "The action "+action+" is not valid", http.StatusBadRequest)
 	}

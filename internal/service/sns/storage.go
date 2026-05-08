@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,46 @@ import (
 const (
 	defaultRegion    = "us-east-1"
 	defaultAccountID = "000000000000"
+	defaultPolicy    = `{
+		"Version": "2008-10-17",
+		"Id": "__default_policy_ID",
+		"Statement": [
+			{
+			"Sid": "__default_statement_ID",
+			"Effect": "Allow",
+			"Principal": {
+				"AWS": "*"
+			},
+			"Action": [
+				"SNS:GetTopicAttributes",
+				"SNS:SetTopicAttributes",
+				"SNS:AddPermission",
+				"SNS:RemovePermission",
+				"SNS:DeleteTopic",
+				"SNS:Subscribe",
+				"SNS:ListSubscriptionsByTopic",
+				"SNS:Publish",
+				"SNS:Receive"
+			],
+			"Resource": "*"
+			}
+		]
+	}`
+
+	defaultDeliveryPolicy = `{
+		"http": {
+			"defaultHealthyRetryPolicy": {
+			"minDelayTarget": 20,
+			"maxDelayTarget": 20,
+			"numRetries": 3,
+			"numMaxDelayRetries": 0,
+			"numNoDelayRetries": 0,
+			"numMinDelayRetries": 0,
+			"backoffFunction": "linear"
+			},
+			"disableSubscriptionOverrides": false
+		}
+	}`
 )
 
 // SQSPublisher is an interface for publishing messages to SQS.
@@ -345,14 +386,14 @@ func (m *MemoryStorage) deliverMessage(ctx context.Context, sub *Subscription, m
 	switch sub.Protocol {
 	case "sqs":
 		if m.SqsPublisher != nil {
-			attrs := map[string]string{
+			attributes := map[string]string{
 				"MessageId": messageID,
 			}
 			if subject != "" {
-				attrs["Subject"] = subject
+				attributes["Subject"] = subject
 			}
 
-			if err := m.SqsPublisher.PublishToSQS(ctx, sub.Endpoint, message, attrs); err != nil {
+			if err := m.SqsPublisher.PublishToSQS(ctx, sub.Endpoint, message, attributes); err != nil {
 				return fmt.Errorf("failed to publish to SQS: %w", err)
 			}
 
@@ -476,8 +517,8 @@ func (m *MemoryStorage) buildSubscriptionARN(topicARN string) string {
 
 // GetTopicAttributes returns the attribute of a topic.
 func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (map[string]string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	topic, exists := m.Topics[topicARN]
 	if !exists {
@@ -486,11 +527,47 @@ func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (
 			Message: fmt.Sprintf("Topic does not exist: %s", topicARN),
 		}
 	}
-	// Initialize the attributes map
-	attributes := make(map[string]string)
 
 	// Copy the attributes for thread safety
-	maps.Copy(attributes, topic.Attributes)
+	attributes := make(map[string]string)
+	if topic.Attributes != nil {
+		maps.Copy(attributes, topic.Attributes)
+	}
+
+	attributes["TopicArn"] = topic.ARN
+	attributes["Owner"] = defaultAccountID
+
+	if topic.DisplayName != "" {
+		attributes["DisplayName"] = topic.DisplayName
+	}
+
+	confirm, pending, deleted := 0, 0, 0 // Default value for emulator
+
+	for _, subscription := range topic.Subscriptions {
+		if ok := subscription.ConfirmationWasAuthenticated; ok {
+			confirm++
+		} else {
+			pending++
+		}
+	}
+	// Assignment of attributes
+	attributes["SubscriptionsConfirmed"] = strconv.Itoa(confirm)
+	attributes["SubscriptionsDeleted"] = strconv.Itoa(deleted)
+	attributes["SubscriptionsPending"] = strconv.Itoa(pending)
+
+	// Get Policy
+	if _, ok := attributes["Policy"]; !ok {
+		attributes["Policy"] = defaultPolicy
+	}
+
+	// Get EffectiveDeliveryPolicy
+	if _, ok := attributes["EffectiveDeliveryPolicy"]; !ok {
+		if dp, ok := attributes["DeliveryPolicy"]; ok {
+			attributes["EffectiveDeliveryPolicy"] = dp
+		} else {
+			attributes["EffectiveDeliveryPolicy"] = defaultDeliveryPolicy
+		}
+	}
 
 	return attributes, nil
 }

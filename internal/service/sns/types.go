@@ -185,7 +185,7 @@ type XMLAttributes struct {
 	Entry []XMLEntry `xml:"entry"`
 }
 
-// XMLEntry contanins key and value pairs to align with AWS requirements.
+// XMLEntry contains key and value pairs to align with AWS requirements.
 type XMLEntry struct {
 	Key   string `xml:"key"`
 	Value string `xml:"value"`
