@@ -557,7 +557,12 @@ func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (
 
 	// Get Policy
 	if _, ok := attributes["Policy"]; !ok {
-		attributes["Policy"] = defaultPolicy
+		policy, err := generateDefaultPolicy(defaultRegion, defaultAccountID, topic.Name)
+		if err != nil {
+			return nil, fmt.Errorf("could not generate default policy")
+		}
+
+		attributes["Policy"] = policy
 	}
 
 	// Get EffectiveDeliveryPolicy
@@ -570,4 +575,40 @@ func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (
 	}
 
 	return attributes, nil
+}
+
+func generateDefaultPolicy(region, accountID, topicName string) (string, error) {
+	policy := Policy{
+		Version: "2008-10-17",
+		ID:      fmt.Sprintf("%s/%s/%s", region, accountID, topicName),
+		Statement: []Statement{
+			{
+				Sid:    fmt.Sprintf("%s/%s/%s", region, accountID, topicName),
+				Effect: "Allow",
+				Principal: map[string]any{
+					"AWS": "*",
+				},
+				Action: []string{
+					"SNS:GetTopicAttributes",
+					"SNS:SetTopicAttributes",
+					"SNS:AddPermission",
+					"SNS:RemovePermission",
+					"SNS:DeleteTopic",
+					"SNS:Subscribe",
+					"SNS:ListSubscriptionsByTopic",
+					"SNS:Publish",
+				},
+				Resource: fmt.Sprintf("arn:aws:sns:%s:%s:%s", region, accountID, topicName),
+				Condition: map[string]any{
+					"StringLike": map[string]any{
+						"AWS:SourceArn": fmt.Sprintf("arn:aws:*:*:%s:*", accountID),
+					},
+				},
+			},
+		},
+	}
+
+	jsonBytes, err := json.Marshal(policy)
+
+	return string(jsonBytes), err
 }

@@ -152,6 +152,23 @@ type ErrorResponse struct {
 	Message string `json:"Message"`
 }
 
+// Policy represents the structure for the AWS Policy.
+type Policy struct {
+	Version   string      `json:"Version"`
+	ID        string      `json:"Id"`
+	Statement []Statement `json:"Statement"`
+}
+
+// Statement represents the structure for the statement object.
+type Statement struct {
+	Sid       string         `json:"Sid,omitempty"`
+	Effect    string         `json:"Effect"`
+	Principal map[string]any `json:"Principal"`
+	Action    []string       `json:"Action"`
+	Resource  string         `json:"Resource"`
+	Condition map[string]any `json:"Condition,omitempty"`
+}
+
 // XML response types for Query protocol.
 
 // XMLCreateTopicResponse is the XML response for CreateTopic.
